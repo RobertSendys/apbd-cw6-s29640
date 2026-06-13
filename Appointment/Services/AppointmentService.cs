@@ -126,11 +126,15 @@ namespace Appointment.Services
                     "Nie można zmienić terminu wizyty, która ma status Completed.");
             }
 
-            if (await _lookupRepository.DoctorHasOtherScheduledAppointmentAtAsync(
-                    connection,
-                    dto.IdDoctor,
-                    dto.AppointmentDate,
-                    idAppointment))
+            var appointmentDateChanged = currentState.AppointmentDate != dto.AppointmentDate;
+            var doctorChanged = currentState.IdDoctor != dto.IdDoctor;
+
+            if ((appointmentDateChanged || doctorChanged)
+                    && await _lookupRepository.DoctorHasOtherScheduledAppointmentAtAsync(
+                                    connection,
+                                    dto.IdDoctor,
+                                    dto.AppointmentDate,
+                                    idAppointment))
             {
                 return (false, AppointmentUpdateError.Conflict,
                     "Lekarz ma już inną zaplanowaną wizytę w tym terminie.");

@@ -95,7 +95,7 @@ namespace Appointment.Services
             int idAppointment)
         {
             const string sql = """
-            SELECT AppointmentDate, Status
+            SELECT IdDoctor, AppointmentDate, Status
             FROM dbo.Appointments
             WHERE IdAppointment = @IdAppointment;
             """;
@@ -109,8 +109,9 @@ namespace Appointment.Services
                 return null;
 
             return new AppointmentCurrentState(
-                reader.GetDateTime(reader.GetOrdinal("AppointmentDate")),
-                reader.GetString(reader.GetOrdinal("Status")));
+                            reader.GetInt32(reader.GetOrdinal("IdDoctor")),
+                            reader.GetDateTime(reader.GetOrdinal("AppointmentDate")),
+                            reader.GetString(reader.GetOrdinal("Status")));
         }
 
         public async Task<string?> GetAppointmentStatusAsync(
