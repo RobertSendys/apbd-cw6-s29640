@@ -6,6 +6,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 
+builder.Services.AddScoped<AppointmentQueryRepository>();
 builder.Services.AddScoped<AppointmentLookupRepository>();
 builder.Services.AddScoped<AppointmentCommandRepository>();
 builder.Services.AddScoped<AppointmentService>();
