@@ -69,7 +69,7 @@ Content-Type: application/json
 }
 
 ### 10. Usuñ wizytê
-DELETE {{Appointment_HostAddress}}/api/appointments/5
+DELETE {{Appointment_HostAddress}}/api/appointments/7
 Accept: application/json
 
 ### Usuñ nieistniej¹c¹ wizytê - oczekiwane 404

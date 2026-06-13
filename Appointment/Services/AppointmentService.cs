@@ -8,9 +8,17 @@ namespace Appointment.Services
     {
         private readonly IConfiguration _configuration;
 
-        public AppointmentService(IConfiguration configuration)
+        private readonly AppointmentLookupRepository _lookupRepository;
+        private readonly AppointmentCommandRepository _commandRepository;
+
+        public AppointmentService(
+            IConfiguration configuration,
+            AppointmentLookupRepository lookupRepository,
+            AppointmentCommandRepository commandRepository)
         {
             _configuration = configuration;
+            _lookupRepository = lookupRepository;
+            _commandRepository = commandRepository;
         }
 
         private string ConnectionString =>
@@ -163,32 +171,37 @@ namespace Appointment.Services
 
 
         public async Task<(bool Success, AppointmentCreateError Error, string? ErrorMessage, int? IdAppointment)>
-                    CreateAppointmentAsync(CreateAppointmentRequestDto dto)
+                CreateAppointmentAsync(CreateAppointmentRequestDto dto)
         {
-            if (!IsAppointmentDateValid(dto.AppointmentDate))
+            if (!AppointmentBusinessRules.IsAppointmentDateValid(dto.AppointmentDate))
                 return (false, AppointmentCreateError.BadRequest,
                     "Termin wizyty nie może być w przeszłości.", null);
 
-            if (!IsReasonValid(dto.Reason))
+            if (!AppointmentBusinessRules.IsReasonValid(dto.Reason))
                 return (false, AppointmentCreateError.BadRequest,
                     "Opis wizyty jest wymagany i nie może przekraczać 250 znaków.", null);
 
             await using var connection = new SqlConnection(ConnectionString);
             await connection.OpenAsync();
 
-            if (!await PatientExistsAndIsActiveAsync(connection, dto.IdPatient))
+            if (!await _lookupRepository.PatientExistsAndIsActiveAsync(connection, dto.IdPatient))
                 return (false, AppointmentCreateError.NotFound,
                     "Pacjent nie istnieje albo jest nieaktywny.", null);
 
-            if (!await DoctorExistsAndIsActiveAsync(connection, dto.IdDoctor))
+            if (!await _lookupRepository.DoctorExistsAndIsActiveAsync(connection, dto.IdDoctor))
                 return (false, AppointmentCreateError.NotFound,
                     "Lekarz nie istnieje albo jest nieaktywny.", null);
 
-            if (await DoctorHasScheduledAppointmentAtAsync(connection, dto.IdDoctor, dto.AppointmentDate))
+            if (await _lookupRepository.DoctorHasScheduledAppointmentAtAsync(
+                    connection,
+                    dto.IdDoctor,
+                    dto.AppointmentDate))
+            {
                 return (false, AppointmentCreateError.Conflict,
                     "Lekarz ma już zaplanowaną wizytę w tym terminie.", null);
+            }
 
-            int? idAppointment = await InsertAppointmentAsync(connection, dto);
+            var idAppointment = await _commandRepository.InsertAppointmentAsync(connection, dto);
 
             return (true, AppointmentCreateError.None, null, idAppointment);
         }
@@ -198,28 +211,28 @@ namespace Appointment.Services
         public async Task<(bool Success, AppointmentUpdateError Error, string? ErrorMessage)>
                 UpdateAppointmentAsync(int idAppointment, UpdateAppointmentRequestDto dto)
         {
-            if (!IsStatusValid(dto.Status))
+            if (!AppointmentBusinessRules.IsStatusValid(dto.Status))
                 return (false, AppointmentUpdateError.BadRequest,
                     "Status wizyty musi mieć jedną z wartości: Scheduled, Completed, Cancelled.");
 
-            if (!IsReasonValid(dto.Reason))
+            if (!AppointmentBusinessRules.IsReasonValid(dto.Reason))
                 return (false, AppointmentUpdateError.BadRequest,
                     "Opis wizyty jest wymagany i nie może przekraczać 250 znaków.");
 
             await using var connection = new SqlConnection(ConnectionString);
             await connection.OpenAsync();
 
-            var currentState = await GetAppointmentCurrentStateAsync(connection, idAppointment);
+            var currentState = await _lookupRepository.GetAppointmentCurrentStateAsync(connection, idAppointment);
 
             if (currentState is null)
                 return (false, AppointmentUpdateError.NotFound,
                     "Wizyta nie istnieje.");
 
-            if (!await PatientExistsAndIsActiveAsync(connection, dto.IdPatient))
+            if (!await _lookupRepository.PatientExistsAndIsActiveAsync(connection, dto.IdPatient))
                 return (false, AppointmentUpdateError.NotFound,
                     "Pacjent nie istnieje albo jest nieaktywny.");
 
-            if (!await DoctorExistsAndIsActiveAsync(connection, dto.IdDoctor))
+            if (!await _lookupRepository.DoctorExistsAndIsActiveAsync(connection, dto.IdDoctor))
                 return (false, AppointmentUpdateError.NotFound,
                     "Lekarz nie istnieje albo jest nieaktywny.");
 
@@ -230,7 +243,7 @@ namespace Appointment.Services
                     "Nie można zmienić terminu wizyty, która ma status Completed.");
             }
 
-            if (await DoctorHasOtherScheduledAppointmentAtAsync(
+            if (await _lookupRepository.DoctorHasOtherScheduledAppointmentAtAsync(
                     connection,
                     dto.IdDoctor,
                     dto.AppointmentDate,
@@ -240,7 +253,7 @@ namespace Appointment.Services
                     "Lekarz ma już inną zaplanowaną wizytę w tym terminie.");
             }
 
-            await UpdateAppointmentInDatabaseAsync(connection, idAppointment, dto);
+            await _commandRepository.UpdateAppointmentAsync(connection, idAppointment, dto);
 
             return (true, AppointmentUpdateError.None, null);
         }
@@ -254,7 +267,7 @@ namespace Appointment.Services
             await using var connection = new SqlConnection(ConnectionString);
             await connection.OpenAsync();
 
-            var status = await GetAppointmentStatusAsync(connection, idAppointment);
+            var status = await _lookupRepository.GetAppointmentStatusAsync(connection, idAppointment);
 
             if (status is null)
             {
@@ -268,244 +281,9 @@ namespace Appointment.Services
                     "Nie można usunąć wizyty o statusie Completed.");
             }
 
-            await DeleteAppointmentFromDatabaseAsync(connection, idAppointment);
+            await _commandRepository.DeleteAppointmentAsync(connection, idAppointment);
 
             return (true, AppointmentDeleteError.None, null);
-        }
-
-
-        private static bool IsReasonValid(string? reason)
-        {
-            return !string.IsNullOrWhiteSpace(reason) && reason.Length <= 250;
-        }
-
-        private static bool IsAppointmentDateValid(DateTime appointmentDate)
-        {
-            return appointmentDate > DateTime.Now;
-        }
-
-        private static bool IsStatusValid(string? status)
-        {
-            return status is "Scheduled" or "Completed" or "Cancelled";
-        }
-
-
-
-
-
-        private static async Task<bool> PatientExistsAndIsActiveAsync(
-            SqlConnection connection,
-            int idPatient)
-        {
-            const string sql = """
-        SELECT COUNT(1)
-        FROM dbo.Patients
-        WHERE IdPatient = @IdPatient
-          AND IsActive = 1;
-        """;
-
-            await using var command = new SqlCommand(sql, connection);
-            command.Parameters.Add("@IdPatient", SqlDbType.Int).Value = idPatient;
-
-            var result = (int?)await command.ExecuteScalarAsync();
-
-            return result > 0;
-        }
-
-        private static async Task<bool> DoctorExistsAndIsActiveAsync(
-            SqlConnection connection,
-            int idDoctor)
-        {
-            const string sql = """
-        SELECT COUNT(1)
-        FROM dbo.Doctors
-        WHERE IdDoctor = @IdDoctor
-          AND IsActive = 1;
-        """;
-
-            await using var command = new SqlCommand(sql, connection);
-            command.Parameters.Add("@IdDoctor", SqlDbType.Int).Value = idDoctor;
-
-            var result = (int?)await command.ExecuteScalarAsync();
-
-            return result > 0;
-        }
-
-        private static async Task<bool> DoctorHasScheduledAppointmentAtAsync(
-            SqlConnection connection,
-            int idDoctor,
-            DateTime appointmentDate)
-        {
-            const string sql = """
-        SELECT COUNT(1)
-        FROM dbo.Appointments
-        WHERE IdDoctor = @IdDoctor
-          AND AppointmentDate = @AppointmentDate
-          AND Status = N'Scheduled';
-        """;
-
-            await using var command = new SqlCommand(sql, connection);
-            command.Parameters.Add("@IdDoctor", SqlDbType.Int).Value = idDoctor;
-            command.Parameters.Add("@AppointmentDate", SqlDbType.DateTime).Value = appointmentDate;
-
-            var result = (int?)await command.ExecuteScalarAsync();
-
-            return result > 0;
-        }
-
-        private static async Task<int?> InsertAppointmentAsync(
-            SqlConnection connection,
-            CreateAppointmentRequestDto dto)
-        {
-            const string sql = """
-        INSERT INTO dbo.Appointments
-        (
-            IdPatient,
-            IdDoctor,
-            AppointmentDate,
-            Status,
-            Reason,
-            InternalNotes
-        )
-        OUTPUT INSERTED.IdAppointment
-        VALUES
-        (
-            @IdPatient,
-            @IdDoctor,
-            @AppointmentDate,
-            N'Scheduled',
-            @Reason,
-            NULL
-        );
-        """;
-
-            await using var command = new SqlCommand(sql, connection);
-
-            command.Parameters.Add("@IdPatient", SqlDbType.Int).Value = dto.IdPatient;
-            command.Parameters.Add("@IdDoctor", SqlDbType.Int).Value = dto.IdDoctor;
-            command.Parameters.Add("@AppointmentDate", SqlDbType.DateTime).Value = dto.AppointmentDate;
-            command.Parameters.Add("@Reason", SqlDbType.NVarChar, 250).Value = dto.Reason.Trim();
-
-            var newId = (int?)await command.ExecuteScalarAsync();
-
-            return newId;
-        }
-
-
-        private static async Task<AppointmentCurrentState?> GetAppointmentCurrentStateAsync(
-            SqlConnection connection,
-            int idAppointment)
-        {
-            const string sql = """
-        SELECT AppointmentDate, Status
-        FROM dbo.Appointments
-        WHERE IdAppointment = @IdAppointment;
-        """;
-
-            await using var command = new SqlCommand(sql, connection);
-            command.Parameters.Add("@IdAppointment", SqlDbType.Int).Value = idAppointment;
-
-            await using var reader = await command.ExecuteReaderAsync();
-
-            if (!await reader.ReadAsync())
-                return null;
-
-            return new AppointmentCurrentState(
-                reader.GetDateTime(reader.GetOrdinal("AppointmentDate")),
-                reader.GetString(reader.GetOrdinal("Status")));
-        }
-
-        private static async Task<bool> DoctorHasOtherScheduledAppointmentAtAsync(
-            SqlConnection connection,
-            int idDoctor,
-            DateTime appointmentDate,
-            int idAppointment)
-        {
-            const string sql = """
-        SELECT COUNT(1)
-        FROM dbo.Appointments
-        WHERE IdDoctor = @IdDoctor
-          AND AppointmentDate = @AppointmentDate
-          AND Status = N'Scheduled'
-          AND IdAppointment <> @IdAppointment;
-        """;
-
-            await using var command = new SqlCommand(sql, connection);
-
-            command.Parameters.Add("@IdDoctor", SqlDbType.Int).Value = idDoctor;
-            command.Parameters.Add("@AppointmentDate", SqlDbType.DateTime).Value = appointmentDate;
-            command.Parameters.Add("@IdAppointment", SqlDbType.Int).Value = idAppointment;
-
-            var result = (int?)await command.ExecuteScalarAsync();
-
-            return result > 0;
-        }
-
-        private static async Task UpdateAppointmentInDatabaseAsync(
-            SqlConnection connection,
-            int idAppointment,
-            UpdateAppointmentRequestDto dto)
-        {
-            const string sql = """
-        UPDATE dbo.Appointments
-        SET
-            IdPatient = @IdPatient,
-            IdDoctor = @IdDoctor,
-            AppointmentDate = @AppointmentDate,
-            Status = @Status,
-            Reason = @Reason,
-            InternalNotes = @InternalNotes
-        WHERE IdAppointment = @IdAppointment;
-        """;
-
-            await using var command = new SqlCommand(sql, connection);
-
-            command.Parameters.Add("@IdAppointment", SqlDbType.Int).Value = idAppointment;
-            command.Parameters.Add("@IdPatient", SqlDbType.Int).Value = dto.IdPatient;
-            command.Parameters.Add("@IdDoctor", SqlDbType.Int).Value = dto.IdDoctor;
-            command.Parameters.Add("@AppointmentDate", SqlDbType.DateTime).Value = dto.AppointmentDate;
-            command.Parameters.Add("@Status", SqlDbType.NVarChar, 20).Value = dto.Status;
-            command.Parameters.Add("@Reason", SqlDbType.NVarChar, 250).Value = dto.Reason.Trim();
-            command.Parameters.Add("@InternalNotes", SqlDbType.NVarChar, 1000).Value =
-                string.IsNullOrWhiteSpace(dto.InternalNotes)
-                    ? DBNull.Value
-                    : dto.InternalNotes.Trim();
-
-            await command.ExecuteNonQueryAsync();
-        }
-
-
-        private static async Task<string?> GetAppointmentStatusAsync(
-                    SqlConnection connection,
-                    int idAppointment)
-        {
-            const string sql = """
-        SELECT Status
-        FROM dbo.Appointments
-        WHERE IdAppointment = @IdAppointment;
-        """;
-
-            await using var command = new SqlCommand(sql, connection);
-            command.Parameters.Add("@IdAppointment", SqlDbType.Int).Value = idAppointment;
-
-            var result = await command.ExecuteScalarAsync();
-
-            return result as string;
-        }
-
-        private static async Task DeleteAppointmentFromDatabaseAsync(
-            SqlConnection connection,
-            int idAppointment)
-        {
-            const string sql = """
-        DELETE FROM dbo.Appointments
-        WHERE IdAppointment = @IdAppointment;
-        """;
-
-            await using var command = new SqlCommand(sql, connection);
-            command.Parameters.Add("@IdAppointment", SqlDbType.Int).Value = idAppointment;
-
-            await command.ExecuteNonQueryAsync();
         }
 
     }
