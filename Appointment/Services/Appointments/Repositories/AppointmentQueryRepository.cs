@@ -1,5 +1,6 @@
 ﻿using Appointment.DTOs;
 using Microsoft.Data.SqlClient;
+using System.Data;
 
 namespace Appointment.Services
 {
@@ -8,7 +9,8 @@ namespace Appointment.Services
         public async Task<List<AppointmentListDto>> GetAppointmentsAsync(
             SqlConnection connection,
             string? status,
-            string? patientLastName)
+            string? patientLastName,
+            string? doctorLastName)
         {
             var appointments = new List<AppointmentListDto>();
 
@@ -20,20 +22,25 @@ namespace Appointment.Services
                 a.Reason,
                 p.FirstName + ' ' + p.LastName AS PatientFullName,
                 p.Email AS PatientEmail
-            FROM Appointments a
-            JOIN Patients p ON a.IdPatient = p.IdPatient
+            FROM dbo.Appointments a
+            JOIN dbo.Patients p ON a.IdPatient = p.IdPatient
+            JOIN dbo.Doctors d ON a.IdDoctor = d.IdDoctor
             WHERE (@Status IS NULL OR a.Status = @Status)
               AND (@PatientLastName IS NULL OR p.LastName = @PatientLastName)
+              AND (@DoctorLastName IS NULL OR d.LastName = @DoctorLastName)
             ORDER BY a.AppointmentDate;
             """;
 
             await using var command = new SqlCommand(sql, connection);
 
-            command.Parameters.AddWithValue("@Status",
-                (object?)status ?? DBNull.Value);
+            command.Parameters.Add("@Status", SqlDbType.NVarChar, 30).Value =
+                (object?)status ?? DBNull.Value;
 
-            command.Parameters.AddWithValue("@PatientLastName",
-                (object?)patientLastName ?? DBNull.Value);
+            command.Parameters.Add("@PatientLastName", SqlDbType.NVarChar, 100).Value =
+                (object?)patientLastName ?? DBNull.Value;
+
+            command.Parameters.Add("@DoctorLastName", SqlDbType.NVarChar, 100).Value =
+                (object?)doctorLastName ?? DBNull.Value;
 
             await using var reader = await command.ExecuteReaderAsync();
 
@@ -93,7 +100,7 @@ namespace Appointment.Services
 
             await using var command = new SqlCommand(sql, connection);
 
-            command.Parameters.AddWithValue("@IdAppointment", idAppointment);
+            command.Parameters.Add("@IdAppointment", SqlDbType.Int).Value = idAppointment;
 
             await using var reader = await command.ExecuteReaderAsync();
 

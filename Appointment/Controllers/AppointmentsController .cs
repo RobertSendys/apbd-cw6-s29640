@@ -18,9 +18,10 @@ namespace Appointment.Controllers
         [HttpGet]
         public async Task<ActionResult<List<AppointmentListDto>>> GetAppointments(
             [FromQuery] string? status,
-            [FromQuery] string? patientLastName)
+            [FromQuery] string? patientLastName,
+            [FromQuery] string? doctorLastName)
         {
-            var appointments = await _appointmentService.GetAppointmentsAsync(status, patientLastName);
+            var appointments = await _appointmentService.GetAppointmentsAsync(status, patientLastName, doctorLastName);
 
             return Ok(appointments);
         }

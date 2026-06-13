@@ -27,7 +27,10 @@ namespace Appointment.Services
             _configuration.GetConnectionString("DefaultConnection")!;
 
 
-        public async Task<List<AppointmentListDto>> GetAppointmentsAsync(string? status, string? patientLastName)
+        public async Task<List<AppointmentListDto>> GetAppointmentsAsync(
+                            string? status, 
+                            string? patientLastName, 
+                            string? doctorLastName)
         {
             await using var connection = new SqlConnection(ConnectionString);
             await connection.OpenAsync();
@@ -35,7 +38,8 @@ namespace Appointment.Services
             return await _queryRepository.GetAppointmentsAsync(
                 connection,
                 status,
-                patientLastName);
+                patientLastName,
+                doctorLastName);
         }
 
         public async Task<AppointmentDetailsDto?> GetAppointmentByIdAsync(int idAppointment)

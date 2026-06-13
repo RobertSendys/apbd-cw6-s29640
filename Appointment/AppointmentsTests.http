@@ -6,23 +6,28 @@
 GET {{Appointment_HostAddress}}/api/appointments
 Accept: application/json
 
-### 2. Pobierz wizyty po statusie
+### 2a. Pobierz wizyty po statusie
 GET {{Appointment_HostAddress}}/api/appointments?status=Scheduled
 Accept: application/json
 
-### 3. Pobierz wizyty po nazwisku pacjenta
+### 2b. Pobierz wizyty po nazwisku pacjenta
 GET {{Appointment_HostAddress}}/api/appointments?patientLastName=Nowak
 Accept: application/json
 
-### 4. Pobierz jedn¹ istniej¹c¹ wizytê
+### 2c. Pobierz wizyty po nazwisku lekarza
+GET {{Appointment_HostAddress}}/api/appointments?doctorLastName=Mazur
+Accept: application/json
+
+
+### 3. Pobierz jedn¹ istniej¹c¹ wizytê
 GET {{Appointment_HostAddress}}/api/appointments/1
 Accept: application/json
 
-### 5. SprawdŸ 404 dla nieistniej¹cej wizyty
+### 4. SprawdŸ 404 dla nieistniej¹cej wizyty
 GET {{Appointment_HostAddress}}/api/appointments/999999
 Accept: application/json
 
-### 6. Dodaj poprawn¹ wizytê
+### 5. Dodaj poprawn¹ wizytê
 POST {{Appointment_HostAddress}}/api/appointments
 Content-Type: application/json
 
@@ -33,7 +38,7 @@ Content-Type: application/json
   "reason": "Control visit"
 }
 
-### 7. Dodaj wizytê w przesz³oœci - oczekiwane 400
+### 6. Dodaj wizytê w przesz³oœci - oczekiwane 400
 POST {{Appointment_HostAddress}}/api/appointments
 Content-Type: application/json
 
@@ -44,7 +49,7 @@ Content-Type: application/json
   "reason": "Past visit"
 }
 
-### 8. Konflikt terminu - oczekiwane 409
+### 7. Konflikt terminu - oczekiwane 409
 POST {{Appointment_HostAddress}}/api/appointments
 Content-Type: application/json
 
@@ -55,7 +60,7 @@ Content-Type: application/json
   "reason": "Conflict visit"
 }
 
-### 9. Aktualizuj wizytê
+### 8. Aktualizuj wizytê
 PUT {{Appointment_HostAddress}}/api/appointments/1
 Content-Type: application/json
 
@@ -68,14 +73,14 @@ Content-Type: application/json
   "internalNotes": "Patient asked for a later hour."
 }
 
-### 10. Usuñ wizytê
+### 9. Usuñ wizytê
 DELETE {{Appointment_HostAddress}}/api/appointments/7
 Accept: application/json
 
-### Usuñ nieistniej¹c¹ wizytê - oczekiwane 404
+### 10a.Usuñ nieistniej¹c¹ wizytê - oczekiwane 404
 DELETE {{Appointment_HostAddress}}/api/appointments/999999
 Accept: application/json
 
-### Usuñ wizytê o statusie Scheduled - oczekiwane 409
+### 10b.Usuñ wizytê o statusie Scheduled - oczekiwane 409
 DELETE {{Appointment_HostAddress}}/api/appointments/4
 Accept: application/json
