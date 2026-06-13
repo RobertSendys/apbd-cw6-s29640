@@ -67,6 +67,31 @@ namespace Appointment.Controllers
                 $"/api/appointments/{result.IdAppointment}",
                 new { idAppointment = result.IdAppointment });
         }
+
+
+        [HttpPut("{idAppointment:int}")]
+        public async Task<IActionResult> UpdateAppointment(int idAppointment, UpdateAppointmentRequestDto dto)
+        {
+            var result = await _appointmentService.UpdateAppointmentAsync(idAppointment, dto);
+
+            if (!result.Success)
+            {
+                var error = new ErrorResponseDto
+                {
+                    Message = result.ErrorMessage!
+                };
+
+                return result.Error switch
+                {
+                    AppointmentUpdateError.BadRequest => BadRequest(error),
+                    AppointmentUpdateError.NotFound => NotFound(error),
+                    AppointmentUpdateError.Conflict => Conflict(error),
+                    _ => BadRequest(error)
+                };
+            }
+
+            return Ok();
+        }
     }
 
 
