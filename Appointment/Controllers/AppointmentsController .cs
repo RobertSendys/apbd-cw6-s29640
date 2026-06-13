@@ -40,6 +40,33 @@ namespace Appointment.Controllers
 
             return Ok(appointment);
         }
+
+
+        [HttpPost]
+        public async Task<IActionResult> CreateAppointment(CreateAppointmentRequestDto dto)
+        {
+            var result = await _appointmentService.CreateAppointmentAsync(dto);
+
+            if (!result.Success)
+            {
+                var error = new ErrorResponseDto
+                {
+                    Message = result.ErrorMessage!
+                };
+
+                return result.Error switch
+                {
+                    AppointmentCreateError.BadRequest => BadRequest(error),
+                    AppointmentCreateError.NotFound => NotFound(error),
+                    AppointmentCreateError.Conflict => Conflict(error),
+                    _ => BadRequest(error)
+                };
+            }
+
+            return Created(
+                $"/api/appointments/{result.IdAppointment}",
+                new { idAppointment = result.IdAppointment });
+        }
     }
 
 

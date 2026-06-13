@@ -29,7 +29,7 @@ Content-Type: application/json
 {
   "idPatient": 1,
   "idDoctor": 1,
-  "appointmentDate": "2026-05-20T10:30:00",
+  "appointmentDate": "2026-12-20T10:30:00",
   "reason": "Control visit"
 }
 
@@ -51,7 +51,7 @@ Content-Type: application/json
 {
   "idPatient": 1,
   "idDoctor": 1,
-  "appointmentDate": "2026-05-20T10:30:00",
+  "appointmentDate": "2026-12-20T10:30:00",
   "reason": "Conflict visit"
 }
 
