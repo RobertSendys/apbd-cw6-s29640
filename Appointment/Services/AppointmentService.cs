@@ -98,6 +98,10 @@ namespace Appointment.Services
                 return (false, AppointmentUpdateError.BadRequest,
                     "Opis wizyty jest wymagany i nie może przekraczać 250 znaków.");
 
+            if (!AppointmentBusinessRules.IsInternalNotesValid(dto.InternalNotes))
+                return (false, AppointmentUpdateError.BadRequest,
+                    "Notatki wewnętrzne nie mogą przekraczać 500 znaków.");
+
             await using var connection = new SqlConnection(ConnectionString);
             await connection.OpenAsync();
 

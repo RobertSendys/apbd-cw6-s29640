@@ -8,6 +8,11 @@
                    && reason.Length <= 250;
         }
 
+        public static bool IsInternalNotesValid(string? internalNotes)
+        {
+            return internalNotes == null || internalNotes.Trim().Length <= 500;
+        }
+
         public static bool IsAppointmentDateValid(DateTime appointmentDate)
         {
             return appointmentDate > DateTime.Now;

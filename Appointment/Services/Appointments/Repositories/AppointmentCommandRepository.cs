@@ -69,7 +69,7 @@ namespace Appointment.Services
             command.Parameters.Add("@AppointmentDate", SqlDbType.DateTime).Value = dto.AppointmentDate;
             command.Parameters.Add("@Status", SqlDbType.NVarChar, 20).Value = dto.Status;
             command.Parameters.Add("@Reason", SqlDbType.NVarChar, 250).Value = dto.Reason.Trim();
-            command.Parameters.Add("@InternalNotes", SqlDbType.NVarChar, 1000).Value =
+            command.Parameters.Add("@InternalNotes", SqlDbType.NVarChar, 500).Value =
                 string.IsNullOrWhiteSpace(dto.InternalNotes)
                     ? DBNull.Value
                     : dto.InternalNotes.Trim();
