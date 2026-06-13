@@ -92,6 +92,32 @@ namespace Appointment.Controllers
 
             return Ok();
         }
+
+
+        [HttpDelete("{idAppointment:int}")]
+        public async Task<IActionResult> DeleteAppointment(int idAppointment)
+        {
+            var result = await _appointmentService.DeleteAppointmentAsync(idAppointment);
+
+            if (!result.Success)
+            {
+                var error = new ErrorResponseDto
+                {
+                    Message = result.ErrorMessage!
+                };
+
+                return result.Error switch
+                {
+                    AppointmentDeleteError.NotFound => NotFound(error),
+                    AppointmentDeleteError.Conflict => Conflict(error),
+                    _ => BadRequest(error)
+                };
+            }
+
+            return NoContent();
+        }
+
+
     }
 
 

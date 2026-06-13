@@ -246,6 +246,34 @@ namespace Appointment.Services
         }
 
 
+
+
+        public async Task<(bool Success, AppointmentDeleteError Error, string? ErrorMessage)>
+                DeleteAppointmentAsync(int idAppointment)
+        {
+            await using var connection = new SqlConnection(ConnectionString);
+            await connection.OpenAsync();
+
+            var status = await GetAppointmentStatusAsync(connection, idAppointment);
+
+            if (status is null)
+            {
+                return (false, AppointmentDeleteError.NotFound,
+                    "Wizyta nie istnieje.");
+            }
+
+            if (status == "Completed")
+            {
+                return (false, AppointmentDeleteError.Conflict,
+                    "Nie można usunąć wizyty o statusie Completed.");
+            }
+
+            await DeleteAppointmentFromDatabaseAsync(connection, idAppointment);
+
+            return (true, AppointmentDeleteError.None, null);
+        }
+
+
         private static bool IsReasonValid(string? reason)
         {
             return !string.IsNullOrWhiteSpace(reason) && reason.Length <= 250;
@@ -260,6 +288,10 @@ namespace Appointment.Services
         {
             return status is "Scheduled" or "Completed" or "Cancelled";
         }
+
+
+
+
 
         private static async Task<bool> PatientExistsAndIsActiveAsync(
             SqlConnection connection,
@@ -441,5 +473,40 @@ namespace Appointment.Services
 
             await command.ExecuteNonQueryAsync();
         }
+
+
+        private static async Task<string?> GetAppointmentStatusAsync(
+                    SqlConnection connection,
+                    int idAppointment)
+        {
+            const string sql = """
+        SELECT Status
+        FROM dbo.Appointments
+        WHERE IdAppointment = @IdAppointment;
+        """;
+
+            await using var command = new SqlCommand(sql, connection);
+            command.Parameters.Add("@IdAppointment", SqlDbType.Int).Value = idAppointment;
+
+            var result = await command.ExecuteScalarAsync();
+
+            return result as string;
+        }
+
+        private static async Task DeleteAppointmentFromDatabaseAsync(
+            SqlConnection connection,
+            int idAppointment)
+        {
+            const string sql = """
+        DELETE FROM dbo.Appointments
+        WHERE IdAppointment = @IdAppointment;
+        """;
+
+            await using var command = new SqlCommand(sql, connection);
+            command.Parameters.Add("@IdAppointment", SqlDbType.Int).Value = idAppointment;
+
+            await command.ExecuteNonQueryAsync();
+        }
+
     }
 }
