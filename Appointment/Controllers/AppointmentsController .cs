@@ -24,5 +24,23 @@ namespace Appointment.Controllers
 
             return Ok(appointments);
         }
+
+        [HttpGet("{idAppointment:int}")]
+        public async Task<ActionResult<AppointmentDetailsDto>> GetAppointment(int idAppointment)
+        {
+            var appointment = await _appointmentService.GetAppointmentByIdAsync(idAppointment);
+
+            if (appointment == null)
+            {
+                return NotFound(new ErrorResponseDto
+                {
+                    Message = "Appointment not found."
+                });
+            }
+
+            return Ok(appointment);
+        }
     }
+
+
 }
